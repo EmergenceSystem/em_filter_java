@@ -121,6 +121,48 @@ public final class Crypto {
         return new SignedResponse(signerId, signature);
     }
 
+    /**
+     * v2 canonical response, binding the response to its query and timestamp:
+     * {@code utf8(query) ‖ 0x00 ‖ ascii(decimal(ts)) ‖ 0x00 ‖ canonical_response(items)}.
+     */
+    public static byte[] canonicalResponseV2(String query, long ts, JsonNode items) {
+        byte[] q = query.getBytes(StandardCharsets.UTF_8);
+        byte[] t = Long.toString(ts).getBytes(StandardCharsets.US_ASCII);
+        byte[] body = canonicalResponse(items);
+        ByteBuffer bb = ByteBuffer.allocate(q.length + 1 + t.length + 1 + body.length);
+        bb.put(q).put((byte) 0).put(t).put((byte) 0).put(body);
+        return bb.array();
+    }
+
+    /** v2 counterpart of {@link #signResponse}: signs {@link #canonicalResponseV2}. */
+    public static SignedResponse signResponseV2(String query, long ts, JsonNode items, byte[] pub, byte[] seed)
+            throws NoSuchAlgorithmException {
+        byte[] sig = sign(canonicalResponseV2(query, ts, items), seed);
+        String signerId = Base64.getEncoder().encodeToString(idOf(pub));
+        String signature = Base64.getEncoder().encodeToString(sig);
+        return new SignedResponse(signerId, signature);
+    }
+
+    /**
+     * Canonical gossip-auth message:
+     * {@code id(16) ‖ 0x00 ‖ ascii(decimal(ts)) ‖ 0x00 ‖ sha256(body)}.
+     *
+     * @param bodySha256 the 32-byte SHA-256 digest of the request body
+     */
+    public static byte[] canonicalGossipAuth(byte[] id, long ts, byte[] bodySha256) {
+        byte[] t = Long.toString(ts).getBytes(StandardCharsets.US_ASCII);
+        ByteBuffer bb = ByteBuffer.allocate(id.length + 1 + t.length + 1 + bodySha256.length);
+        bb.put(id).put((byte) 0).put(t).put((byte) 0).put(bodySha256);
+        return bb.array();
+    }
+
+    /** Base64 ed25519 signature over {@code canonicalGossipAuth(id, ts, sha256(body))}. */
+    public static String signGossip(byte[] id, long ts, byte[] body, byte[] seed) throws NoSuchAlgorithmException {
+        byte[] digest = MessageDigest.getInstance("SHA-256").digest(body);
+        byte[] sig = sign(canonicalGossipAuth(id, ts, digest), seed);
+        return Base64.getEncoder().encodeToString(sig);
+    }
+
     /** {@code pubkey(32)} and {@code seed(32)} loaded from — or created and persisted to — {@code keyDir}. */
     public record KeyPair(byte[] pub, byte[] seed) {}
 
