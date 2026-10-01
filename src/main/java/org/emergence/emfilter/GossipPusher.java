@@ -76,11 +76,17 @@ public final class GossipPusher {
         for (DiscoNode seed : seeds) {
             String scheme = seed.tls ? "https" : "http";
             URI uri = URI.create(scheme + "://" + seed.host + ":" + seed.port + "/pop/gossip");
-            HttpRequest req = HttpRequest.newBuilder(uri)
+            HttpRequest.Builder rb = HttpRequest.newBuilder(uri)
                     .header("content-type", "application/json")
                     .timeout(Duration.ofSeconds(5))
-                    .POST(HttpRequest.BodyPublishers.ofByteArray(body))
-                    .build();
+                    .POST(HttpRequest.BodyPublishers.ofByteArray(body));
+            try {
+                identity.gossipHeaders(body).forEach(rb::header);
+            } catch (Exception e) {
+                log.log(Level.WARNING, "failed to sign gossip push", e);
+                continue;
+            }
+            HttpRequest req = rb.build();
             try {
                 client.send(req, HttpResponse.BodyHandlers.discarding());
             } catch (Exception e) {

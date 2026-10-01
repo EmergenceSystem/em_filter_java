@@ -23,8 +23,8 @@ import java.util.logging.Logger;
  *
  * <ul>
  *   <li>{@code POST /agent/query} — body {@code {"query": "..."}}; runs the user
- *       handler and replies {@code {"results", "signer_id", "signature"}}, signed
- *       over {@link Crypto#canonicalResponse}. Malformed/absent query → 400;
+ *       handler and replies {@code {"results", "ts", "signer_id", "signature"}}, v2-signed
+ *       over {@link Crypto#canonicalResponseV2} (query + ts + results). Malformed/absent query → 400;
  *       handler error → 500.</li>
  *   <li>{@code POST /pop/gossip} — accepts a remote peer payload into a minimal
  *       flat peer map, replies with this agent's own gossip self-payload.</li>
@@ -97,15 +97,16 @@ public final class AgentServer {
         }
 
         JsonNode items = MAPPER.valueToTree(data);
-        Crypto.SignedResponse sr;
+        Identity.SignedResultsV2 sr;
         try {
-            sr = identity.signResults(items);
+            sr = identity.signResultsV2(query, items);
         } catch (Exception e) {
             throw new IOException(e);
         }
 
         ObjectNode resp = MAPPER.createObjectNode();
         resp.set("results", items);
+        resp.put("ts", sr.ts());
         resp.put("signer_id", sr.signerId());
         resp.put("signature", sr.signature());
         respondJson(ex, 200, resp);

@@ -66,7 +66,8 @@ class AgentServerTest {
 
         assertEquals(Base64.getEncoder().encodeToString(identity.id()), json.get("signer_id").asText());
         byte[] sig = Base64.getDecoder().decode(json.get("signature").asText());
-        byte[] canon = Crypto.canonicalResponse(json.get("results"));
+        assertTrue(json.get("ts").isIntegralNumber());
+        byte[] canon = Crypto.canonicalResponseV2("hi", json.get("ts").asLong(), json.get("results"));
         assertTrue(Crypto.verify(canon, sig, identity.pub()));
     }
 

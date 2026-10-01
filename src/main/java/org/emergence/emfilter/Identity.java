@@ -8,7 +8,9 @@ import java.io.IOException;
 import java.nio.file.Path;
 import java.security.NoSuchAlgorithmException;
 import java.util.Base64;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 
 /**
  * Holds this agent's ed25519 keypair, name and capabilities, and builds the
@@ -72,5 +74,32 @@ public final class Identity {
     /** Sign a results list for {@code /agent/query} or the relay {@code result} frame. */
     public Crypto.SignedResponse signResults(JsonNode items) throws NoSuchAlgorithmException {
         return Crypto.signResponse(items, pub, seed);
+    }
+
+    /** A v2-signed response: the timestamp that was signed, plus {@code signer_id} and {@code signature}. */
+    public record SignedResultsV2(long ts, String signerId, String signature) {}
+
+    /**
+     * Sign a results list with the v2 scheme, binding it to {@code query} and a fresh
+     * timestamp (epoch milliseconds). The caller must emit the returned {@code ts} alongside
+     * {@code signer_id} and {@code signature}.
+     */
+    public SignedResultsV2 signResultsV2(String query, JsonNode items) throws NoSuchAlgorithmException {
+        long ts = System.currentTimeMillis();
+        Crypto.SignedResponse sr = Crypto.signResponseV2(query, ts, items, pub, seed);
+        return new SignedResultsV2(ts, sr.signerId(), sr.signature());
+    }
+
+    /**
+     * Gossip-auth headers ({@code x-pop-id}, {@code x-pop-ts}, {@code x-pop-sig}) for an outbound
+     * {@code POST /pop/gossip} whose exact body bytes are {@code body}.
+     */
+    public Map<String, String> gossipHeaders(byte[] body) throws NoSuchAlgorithmException {
+        long ts = System.currentTimeMillis();
+        Map<String, String> h = new LinkedHashMap<>();
+        h.put("x-pop-id", Base64.getEncoder().encodeToString(id));
+        h.put("x-pop-ts", Long.toString(ts));
+        h.put("x-pop-sig", Crypto.signGossip(id, ts, body, seed));
+        return h;
     }
 }

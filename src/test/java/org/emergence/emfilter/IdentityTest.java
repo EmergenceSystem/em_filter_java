@@ -60,4 +60,30 @@ class IdentityTest {
         assertEquals(fx.get("signer_id_b64").asText(), sr.signerId());
         assertEquals(fx.get("response_signature_b64").asText(), sr.signature());
     }
+
+    @Test
+    void signResultsV2Verifies(@TempDir Path tmp) throws Exception {
+        Identity ident = new Identity("t", tmp, List.of("search"));
+        JsonNode items = MAPPER.readTree("[{\"url\":\"https://x/1\",\"title\":\"T\"}]");
+        Identity.SignedResultsV2 sr = ident.signResultsV2("hello", items);
+
+        assertEquals(Base64.getEncoder().encodeToString(ident.id()), sr.signerId());
+        assertTrue(sr.ts() > 0);
+        byte[] sig = Base64.getDecoder().decode(sr.signature());
+        assertTrue(Crypto.verify(Crypto.canonicalResponseV2("hello", sr.ts(), items), sig, ident.pub()));
+        assertTrue(!Crypto.verify(Crypto.canonicalResponseV2("other", sr.ts(), items), sig, ident.pub()));
+    }
+
+    @Test
+    void gossipHeadersVerify(@TempDir Path tmp) throws Exception {
+        Identity ident = new Identity("t", tmp, List.of("search"));
+        byte[] body = "{\"a\":1}".getBytes(java.nio.charset.StandardCharsets.UTF_8);
+        java.util.Map<String, String> h = ident.gossipHeaders(body);
+
+        assertEquals(Base64.getEncoder().encodeToString(ident.id()), h.get("x-pop-id"));
+        long ts = Long.parseLong(h.get("x-pop-ts"));
+        byte[] digest = java.security.MessageDigest.getInstance("SHA-256").digest(body);
+        byte[] sig = Base64.getDecoder().decode(h.get("x-pop-sig"));
+        assertTrue(Crypto.verify(Crypto.canonicalGossipAuth(ident.id(), ts, digest), sig, ident.pub()));
+    }
 }

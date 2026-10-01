@@ -30,10 +30,12 @@ class GossipPusherTest {
     @Test
     void pushOnceSendsVerifiableSelfPayload(@TempDir Path tmp) throws Exception {
         CompletableFuture<byte[]> captured = new CompletableFuture<>();
+        CompletableFuture<com.sun.net.httpserver.Headers> capturedHeaders = new CompletableFuture<>();
         stub = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
         stub.createContext("/pop/gossip", ex -> {
             byte[] body = ex.getRequestBody().readAllBytes();
             captured.complete(body);
+            capturedHeaders.complete(ex.getRequestHeaders());
             byte[] resp = "{}".getBytes();
             ex.sendResponseHeaders(200, resp.length);
             ex.getResponseBody().write(resp);
@@ -57,5 +59,13 @@ class GossipPusherTest {
         assertTrue(json.has("pubkey"));
         assertTrue(json.has("sig"));
         assertEquals(List.of("search"), MAPPER.convertValue(json.get("capabilities"), List.class));
+
+        com.sun.net.httpserver.Headers h = capturedHeaders.get(2, TimeUnit.SECONDS);
+        byte[] id = java.util.Base64.getDecoder().decode(h.getFirst("x-pop-id"));
+        assertEquals(java.util.Base64.getEncoder().encodeToString(identity.id()), h.getFirst("x-pop-id"));
+        long ts = Long.parseLong(h.getFirst("x-pop-ts"));
+        byte[] sig = java.util.Base64.getDecoder().decode(h.getFirst("x-pop-sig"));
+        byte[] digest = java.security.MessageDigest.getInstance("SHA-256").digest(raw);
+        assertTrue(Crypto.verify(Crypto.canonicalGossipAuth(id, ts, digest), sig, identity.pub()));
     }
 }

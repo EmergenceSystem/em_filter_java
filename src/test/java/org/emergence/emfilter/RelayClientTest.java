@@ -103,7 +103,8 @@ class RelayClientTest {
             assertEquals(Base64.getEncoder().encodeToString(identity.id()), result.get("signer_id").asText());
 
             byte[] sig = Base64.getDecoder().decode(result.get("signature").asText());
-            byte[] canon = Crypto.canonicalResponse(result.get("results"));
+            assertTrue(result.get("ts").isIntegralNumber());
+            byte[] canon = Crypto.canonicalResponseV2("hi", result.get("ts").asLong(), result.get("results"));
             assertTrue(Crypto.verify(canon, sig, identity.pub()));
 
             t.join(5000);

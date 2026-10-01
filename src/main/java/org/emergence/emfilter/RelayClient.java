@@ -123,12 +123,13 @@ public final class RelayClient {
                     }
 
                     JsonNode items = MAPPER.valueToTree(data);
-                    Crypto.SignedResponse sr = identity.signResults(items);
+                    Identity.SignedResultsV2 sr = identity.signResultsV2(body, items);
 
                     ObjectNode resp = MAPPER.createObjectNode();
                     resp.put("action", "result");
                     resp.put("id", qid);
                     resp.set("results", items);
+                    resp.put("ts", sr.ts());
                     resp.put("signer_id", sr.signerId());
                     resp.put("signature", sr.signature());
                     send(MAPPER.writeValueAsString(resp));
